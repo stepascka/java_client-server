@@ -9,37 +9,44 @@ class ServerSomthing extends Thread {
     private Socket socket; // сокет, через который сервер общается с клиентом
     private BufferedReader in; // поток чтения из сокета
     private BufferedWriter out; // поток записи в сокет
+    private String logPath = "src/server/MessageLog.txt"; //путь к файлу записи сообщений
+    private int summ = 0; //сумма
+    private char sign = '+'; //знак
     
     public ServerSomthing(Socket socket) throws IOException {
         this.socket = socket;
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-        //TCP_server.story.printStory(out); // поток вывода передаётся для передачи истории последних 10
         start(); // вызываем run()
     }
     
     @Override
     public void run() {
-        String word;
+        String word = "", mess = "";
         try {
-            // первое сообщение отправленное сюда - это никнейм
-            word = in.readLine();
-            try {
-                out.write(word + "\n");
-                out.flush(); // flush() нужен для выталкивания оставшихся данных
-                // если такие есть, и очистки потока для дьнейших нужд
-            } catch (IOException ignored) {}
             try {
                 while (true) {
                     word = in.readLine();
                     if(word.equals("stop")) {
-                        this.downService(); // харакири
-                        break; // если пришла пустая строка - выходим из цикла прослушки
+                        this.downService(); 
+                        break; //выходим из цикла прослушки
                     }
-                    System.out.println("Echoing: " + word);
-                    TCP_server.story.addStoryEl(word);
+                    
+                    if (checkMessage(word)) { //проверка принятого сообщения на корректность                    	
+                    	this.sendToMessageLog(logPath, word);
+                    	if (word.charAt(word.length()-1) == '=') {                    		
+                    		mess = "Answer: " + this.summ;
+                    		this.sendToMessageLog(logPath, mess); //выводим окончательный ответ вычислений
+                    		this.summ = 0;
+                    	}
+                    }
+                    else {                    	
+                    	mess = "Invalid entry!";
+                    	this.sendToMessageLog(logPath, mess);
+                    }                    
+                    
                     for (ServerSomthing vr : TCP_server.serverList) {
-                        vr.send(word); // отослать принятое сообщение с привязанного клиента всем остальным влючая его
+                        vr.send(mess); // отослать принятое сообщение с привязанного клиента всем остальным влючая его
                     }
                 }
             } catch (NullPointerException ignored) {}
@@ -50,10 +57,62 @@ class ServerSomthing extends Thread {
         }
     }
     
-    /**
-     * отсылка одного сообщения клиенту по указанному потоку
-     * @param msg
-     */
+    private void sendToMessageLog(String logPath, String message) {
+  
+    	File f = new File(logPath);
+        if (f.exists()) {
+            try {
+                BufferedWriter out = new BufferedWriter(new FileWriter(f.getAbsolutePath(), true));
+                out.write(message);
+                out.newLine();
+                out.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    
+    
+    private boolean checkMessage(String message) {    	
+    	if (!message.substring(0, message.length()-1).matches("\\d+")) {    		
+    		return false;
+    	}
+    	
+    	switch(message.charAt(message.length()-1)) {    		
+    	case '+':
+    		if (this.sign == '+') {
+    			this.summ += Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		else {
+    			this.summ -= Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		this.sign = '+';
+    		return true;
+    	case '-':
+    		if (this.sign == '+') {
+    			this.summ += Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		else {
+    			this.summ -= Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		this.sign = '-';
+    		return true;
+    	case '=':
+    		if (this.sign == '+') {
+    			this.summ += Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		else {
+    			this.summ -= Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		this.sign = '+'; //знак оставляем плюс, тк вычисления пойдут по новой
+    		return true;
+    	default:
+    		this.sign = '+'; //знак оставляем плюс, тк вычисления пойдут по новой
+    		this.summ = 0;
+    		return false;
+    	} 
+    }
+    
     private void send(String msg) {
         try {
             out.write(msg + "\n");
@@ -61,12 +120,8 @@ class ServerSomthing extends Thread {
         } catch (IOException ignored) {}
         
     }
-    
-    /**
-     * закрытие сервера
-     * прерывание себя как нити и удаление из списка нитей
-     */
-    private void downService() {
+
+    private void downService() { //прерывание себя как нити и удаление из списка нитей
             try {
             if(!socket.isClosed()) {
                 socket.close();
@@ -81,55 +136,22 @@ class ServerSomthing extends Thread {
     }
 }
 
-/**
- * класс хранящий в ссылочном приватном
- * списке информацию о последних 10 (или меньше) сообщениях
- */
-
-class Story {
-    
-    private LinkedList<String> story = new LinkedList<>();
-    
-    public void addStoryEl(String el) { //добавление сообщения в список
-
-    	story.add(el);
-    }
-    
-    public void printStory(BufferedWriter writer) { //отсылаем последовательно каждое сообщение из списка в поток вывода данному клиенту
-    	
-        if(story.size() > 0) {
-            try {
-                writer.write("History messages" + "\n");
-                for (String vr : story) {
-                    writer.write(vr + "\n");
-                }
-                writer.write("/...." + "\n");
-                writer.flush();
-            } catch (IOException ignored) {}
-            
-        }
-        
-    }
-}
-
 public class TCP_server {
 
-    public static final int PORT = 8080;
-    public static LinkedList<ServerSomthing> serverList = new LinkedList<>(); // список всех нитей - экземпляров
-    // сервера, слушающих каждый своего клиента
-    public static Story story; // история переписки
+    public static final int PORT = 8090;
+    public static LinkedList<ServerSomthing> serverList = new LinkedList<>(); // список всех нитей - экземпляров сервера, слушающих каждый своего клиента
     
     public static void main(String[] args) throws IOException {
     	
         ServerSocket server = new ServerSocket(PORT);
-        story = new Story();
-        System.out.println("Server Started");
+        System.out.println("Server started...");
         try {
             while (true) {
-                // Блокируется до возникновения нового соединения:
-                Socket socket = server.accept();
+                
+                Socket socket = server.accept(); // блокируется до возникновения нового соединения
                 try {
                     serverList.add(new ServerSomthing(socket)); // добавить новое соединенние в список
+                    
                 } catch (IOException e) {
                     // если завершится неудачей, закрывается сокет,
                     // иначе, нить закроет его

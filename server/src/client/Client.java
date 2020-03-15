@@ -13,11 +13,7 @@ class ClientSomthing {
     private BufferedReader input; // поток чтения с консоли
     private String addr; // ip адрес клиента
     private int port; // порт соединения
-    private String nickname; // имя клиента
-    
-    private Date time;
-    private String dtime;
-    private SimpleDateFormat dt1;
+    private String logPath = "src/client/MessageLog.txt"; //путь к файлу записи сообщений
     
     public ClientSomthing(String addr, int port) { //принимаем адрес и номер порта
     	
@@ -26,8 +22,9 @@ class ClientSomthing {
         
         try {
             this.socket = new Socket(addr, port);
+            this.sendToMessageLog(logPath, "Connection established!");
         } catch (IOException e) {
-            System.err.println("Socket failed");
+            System.err.println("Socket failed!");
         }
         
         try {
@@ -35,32 +32,27 @@ class ClientSomthing {
             in = new BufferedReader(new InputStreamReader(socket.getInputStream())); //чтение из сокета
             out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())); //запись в сокет
             
-            //this.pressNickname(); // перед началом необходимо спросит имя
             new ReadMsg().start(); // нить читающая сообщения из сокета в бесконечном цикле
             new WriteMsg().start(); // нить пишущая сообщения в сокет приходящие с консоли в бесконечном цикле
+            
         } catch (IOException e) {
-            // Сокет должен быть закрыт при любой
-            // ошибке, кроме ошибки конструктора сокета:
-            ClientSomthing.this.downService();
+            ClientSomthing.this.downService(); //сокет должен быть закрыт при любой ошибке
         }
-        // В противном случае сокет будет закрыт
-        // в методе run() нити.
     }
     
-    /**
-     * просьба ввести имя,
-     * и отсылка эхо с приветсвием на сервер
-     */
-    
-    private void pressNickname() {
-        System.out.print("Press your nick: ");
-        try {
-            nickname = input.readLine();
-            out.write("Hello " + nickname + "\n");
-            out.flush();
-        } catch (IOException ignored) {
+    private void sendToMessageLog(String logPath, String message) {
+    	  
+    	File f = new File(logPath);
+        if (f.exists()) {
+            try {
+                BufferedWriter out = new BufferedWriter(new FileWriter(f.getAbsolutePath(), true));
+                out.write(message);
+                out.newLine();
+                out.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
-        
     }
 
     private void downService() { //закрытие сокета
@@ -82,11 +74,12 @@ class ClientSomthing {
             try {
                 while (true) {
                     str = in.readLine(); // ждем сообщения с сервера
+                    System.out.println(str); // пишем сообщение с сервера на консоль
+                    
                     if (str.equals("stop")) {
                         ClientSomthing.this.downService(); 
                         break; // выходим из цикла если пришло "stop"
-                    }
-                    System.out.println(str); // пишем сообщение с сервера на консоль
+                    }                    
                 }
             } catch (IOException e) {
                 ClientSomthing.this.downService();
@@ -101,20 +94,18 @@ class ClientSomthing {
         	
             while (true) {
                 String str;
-                try {
-                    time = new Date(); // текущая дата
-                    dt1 = new SimpleDateFormat("HH:mm:ss"); // берем только время до секунд
-                    dtime = dt1.format(time); // время
-                    
+                try {                    
                     str = input.readLine(); // сообщения с консоли
+                    
                     if (str.equals("stop")) {
                         out.write("stop" + "\n");
                         ClientSomthing.this.downService(); 
                         break; // выходим из цикла если пришло "stop"
                     } else {
-                        out.write("(" + dtime + ") " + nickname + ": " + str + "\n"); // отправляем на сервер
+                        out.write(str + "\n"); // отправляем на сервер
                     }
-                    out.flush(); // чистим
+                    out.flush(); // очистка
+                    
                 } catch (IOException e) {
                     ClientSomthing.this.downService();                     
                 }                
@@ -126,7 +117,7 @@ class ClientSomthing {
 public class Client {
     
     public static String ipAddr = "localhost";
-    public static int port = 8080;
+    public static int port = 8090;
     
     public static void main(String[] args) {
         new ClientSomthing(ipAddr, port);
