@@ -1,0 +1,169 @@
+package server;
+
+import java.io.*;
+import java.net.*;
+import java.util.LinkedList;
+
+class ServerSomthing extends Thread {
+    
+    private Socket socket; // сокет, через который сервер общается с клиентом
+    private BufferedReader in; // поток чтения из сокета
+    private BufferedWriter out; // поток записи в сокет
+    private String logPath = "src/server/MessageLog.txt"; //путь к файлу записи сообщений
+    private int summ = 0; //сумма
+    private char sign = '+'; //знак
+    
+    public ServerSomthing(Socket socket) throws IOException {
+        this.socket = socket;
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+        start(); // вызываем run()
+    }
+    
+    @Override
+    public void run() {
+        String word, mess;
+        try {
+            try {
+                while (true) {
+                    word = in.readLine();
+                    if(word.equals("stop")) {
+                        this.downService(); 
+                        break; //выходим из цикла прослушки
+                    }
+                    
+                    if (checkMessage(word)) { //проверка принятого сообщения на корректность
+                    	
+                    	this.sendToMessageLog(logPath, word);
+                    	if (word.charAt(word.length()-1) == '=') {
+                    		
+                    		
+                    		this.sendToMessageLog(logPath, "Answer: " + this.summ); //выводим окончательный ответ вычислений
+                    		this.summ = 0;
+                    	}
+                    }
+                    else {
+                    	this.sendToMessageLog(logPath, "Invalid entry!");
+                    }                    
+                    
+                    for (ServerSomthing vr : TCP_server.serverList) {
+                        vr.send(word); // отослать принятое сообщение с привязанного клиента всем остальным влючая его
+                    }
+                }
+            } catch (NullPointerException ignored) {}
+
+            
+        } catch (IOException e) {
+            this.downService();
+        }
+    }
+    
+    private void sendToMessageLog(String logPath, String message) {
+  
+    	File f = new File(logPath);
+        if (f.exists()) {
+            try {
+                BufferedWriter out = new BufferedWriter(new FileWriter(f.getAbsolutePath(), true));
+                out.write(message);
+                out.newLine();
+                out.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    
+    
+    private boolean checkMessage(String message) {
+    	
+    	if (!message.substring(0, message.length()-1).matches("\\d+")) {
+    		
+    		return false;
+    	}
+    	
+    	switch(message.charAt(message.length()-1)) {
+    		
+    	case '+':
+    		if (this.sign == '+') {
+    			this.summ += Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		else {
+    			this.summ -= Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		this.sign = '+';
+    		return true;
+    	case '-':
+    		if (this.sign == '+') {
+    			this.summ += Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		else {
+    			this.summ -= Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		this.sign = '-';
+    		return true;
+    	case '=':
+    		if (this.sign == '+') {
+    			this.summ += Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		else {
+    			this.summ -= Integer.parseInt(message.substring(0, message.length()-1));
+    		}
+    		this.sign = '+'; //знак оставляем плюс, тк вычисления пойдут по новой
+    		return true;
+    	default:
+    		this.sign = '+'; //знак оставляем плюс, тк вычисления пойдут по новой
+    		this.summ = 0;
+    		return false;
+    	} 
+    }
+    
+    private void send(String msg) {
+        try {
+            out.write(msg + "\n");
+            out.flush();
+        } catch (IOException ignored) {}
+        
+    }
+
+    private void downService() { //прерывание себя как нити и удаление из списка нитей
+            try {
+            if(!socket.isClosed()) {
+                socket.close();
+                in.close();
+                out.close();
+                for (ServerSomthing vr : TCP_server.serverList) {
+                    if(vr.equals(this)) vr.interrupt();
+                    TCP_server.serverList.remove(this);
+                }
+            }
+        } catch (IOException ignored) {}
+    }
+}
+
+public class TCP_server {
+
+    public static final int PORT = 8085;
+    public static LinkedList<ServerSomthing> serverList = new LinkedList<>(); // список всех нитей - экземпляров сервера, слушающих каждый своего клиента
+    
+    public static void main(String[] args) throws IOException {
+    	
+        ServerSocket server = new ServerSocket(PORT);
+        //story = new Story();
+        System.out.println("Server Started...");
+        try {
+            while (true) {
+                
+                Socket socket = server.accept(); // блокируется до возникновения нового соединения
+                try {
+                    serverList.add(new ServerSomthing(socket)); // добавить новое соединенние в список
+                } catch (IOException e) {
+                    // если завершится неудачей, закрывается сокет,
+                    // иначе, нить закроет его
+                    socket.close();
+                }
+            }
+        } finally {
+            server.close();
+        }
+    }
+}
