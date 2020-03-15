@@ -4,35 +4,20 @@ import java.io.*;
 import java.net.*;
 import java.util.LinkedList;
 
-/**
- * проект реализует консольный многопользовательский чат.
- * вход в программу запуска сервера - в классе Server.
- * @author izotopraspadov, the tech
- * @version 2.0
- */
-
 class ServerSomthing extends Thread {
     
-    private Socket socket; // сокет, через который сервер общается с клиентом,
-    // кроме него - клиент и сервер никак не связаны
+    private Socket socket; // сокет, через который сервер общается с клиентом
     private BufferedReader in; // поток чтения из сокета
-    private BufferedWriter out; // поток завписи в сокет
-    
-    /**
-     * для общения с клиентом необходим сокет (адресные данные)
-     * @param socket
-     * @throws IOException
-     */
+    private BufferedWriter out; // поток записи в сокет
     
     public ServerSomthing(Socket socket) throws IOException {
         this.socket = socket;
-        // если потоку ввода/вывода приведут к генерированию искдючения, оно проброситься дальше
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-        TCP_server.story.printStory(out); // поток вывода передаётся для передачи истории последних 10
-        // сооюбщений новому поключению
+        //TCP_server.story.printStory(out); // поток вывода передаётся для передачи истории последних 10
         start(); // вызываем run()
     }
+    
     @Override
     public void run() {
         String word;
@@ -105,29 +90,13 @@ class Story {
     
     private LinkedList<String> story = new LinkedList<>();
     
-    /**
-     * добавить новый элемент в список
-     * @param el
-     */
-    
-    public void addStoryEl(String el) {
-        // если сообщений больше 10, удаляем первое и добавляем новое
-        // иначе просто добавить
-        if (story.size() >= 10) {
-            story.removeFirst();
-            story.add(el);
-        } else {
-            story.add(el);
-        }
+    public void addStoryEl(String el) { //добавление сообщения в список
+
+    	story.add(el);
     }
     
-    /**
-     * отсылаем последовательно каждое сообщение из списка
-     * в поток вывода данному клиенту (новому подключению)
-     * @param writer
-     */
-    
-    public void printStory(BufferedWriter writer) {
+    public void printStory(BufferedWriter writer) { //отсылаем последовательно каждое сообщение из списка в поток вывода данному клиенту
+    	
         if(story.size() > 0) {
             try {
                 writer.write("History messages" + "\n");
@@ -150,12 +119,8 @@ public class TCP_server {
     // сервера, слушающих каждый своего клиента
     public static Story story; // история переписки
     
-    /**
-     * @param args
-     * @throws IOException
-     */
-    
     public static void main(String[] args) throws IOException {
+    	
         ServerSocket server = new ServerSocket(PORT);
         story = new Story();
         System.out.println("Server Started");
@@ -166,8 +131,8 @@ public class TCP_server {
                 try {
                     serverList.add(new ServerSomthing(socket)); // добавить новое соединенние в список
                 } catch (IOException e) {
-                    // Если завершится неудачей, закрывается сокет,
-                    // в противном случае, нить закроет его:
+                    // если завершится неудачей, закрывается сокет,
+                    // иначе, нить закроет его
                     socket.close();
                 }
             }
